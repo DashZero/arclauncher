@@ -5,7 +5,7 @@ This file is for AI coding agents. Read it fully before touching any code.
 ## 0. How to work (read first)
 
 1. **Inspect the repo before proposing anything.** Read `README.md`, `pubspec.yaml`, `.fvmrc`, `lib/`, `android/`, `drift_schemas/`, and `CHANGELOG.md`. Find out how the wallpaper, settings, home rows, Watch Next, and screensaver code is structured.
-2. **Write a short plan and wait for approval** before the first code change. After that, work **one phase at a time** (see section 6). Do not start the next phase until the owner has tested the current one on the TV.
+2. **Write a short plan and wait for approval** before the first code change. The owner decided on 2026-10-25 that this app is small enough to build in **one pass** instead of phase by phase; the phases in section 6 now only describe the order of the TV tests. Say clearly what the owner must test on the TV.
 3. **Never remove existing Arc features.** If a feature is heavy, make it a settings toggle and set its default (see section 4).
 4. **Keep changes small and isolated.** Prefer new files and services over rewriting Arc internals, so upstream changes stay mergeable.
 5. **Ask when unsure** instead of guessing, especially about Home button behavior and anything that changes existing Arc UX.

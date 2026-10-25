@@ -10,6 +10,7 @@
 * The app bar can now hide automatically while not focused.
 * Map "Escape" key to the "Back" action.
 * Translate to Spanish.
+* Family TV features: movie-art wallpaper (TMDB) with a capped rolling cache, optional Google Photos shared-album wallpaper, a "Recommended for you" row (Gemini plus TMDB, kid age filter and horror filter), settings shortcut tiles, and a phone setup page behind a QR code. Backdrop blur is now off by default.
 
 ### Removals
 * Firebase analytics and crashlytics services.
