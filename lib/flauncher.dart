@@ -24,6 +24,9 @@ import 'dart:ui' as ui;
 import 'package:collection/collection.dart';
 import 'package:flauncher/actions.dart';
 import 'package:flauncher/custom_traversal_policy.dart';
+import 'package:flauncher/family/family_settings.dart';
+import 'package:flauncher/family/ui/recommendations_row.dart';
+import 'package:flauncher/family/ui/shortcuts_row.dart';
 import 'package:flauncher/providers/apps_service.dart';
 import 'package:flauncher/providers/launcher_state.dart';
 import 'package:flauncher/providers/settings_service.dart';
@@ -281,6 +284,11 @@ class _FLauncherState extends State<FLauncher> with WidgetsBindingObserver {
 
     if (favoriteApps.isEmpty && otherSections.isEmpty) return _emptyState(context);
 
+    // Family rows sit below the dock / Watch Next block. hasTopBlock is true when that block exists.
+    final hasTopBlock = favoriteApps.isNotEmpty || showWatchNextSection;
+    final showShortcuts = context.select<FamilySettings, bool>((s) => s.showShortcuts && s.shortcutIds.isNotEmpty);
+    final showRecs = context.select<FamilySettings, bool>((s) => s.showRecommendations);
+
     final watchNextSpace = watchNextBigPicture ? 385 : 410;
 
     return CustomScrollView(
@@ -323,9 +331,21 @@ class _FLauncherState extends State<FLauncher> with WidgetsBindingObserver {
               ),
             ),
         ],
+        // Family rows: settings shortcuts and "Recommended for you".
+        // The topmost visible row handles Up to the settings icon.
+        SliverToBoxAdapter(child: ShortcutsRow(handleUpNavigationToSettings: !hasTopBlock && showShortcuts)),
+        if (showRecs)
+          SliverToBoxAdapter(
+            child: RepaintBoundary(
+              child: RecommendationsRow(
+                handleUpNavigationToSettings: !hasTopBlock && !showShortcuts,
+                onTitleFocused: (title) => context.read<WallpaperService>().followTitle(title),
+              ),
+            ),
+          ),
         ..._buildSectionSlivers(
           otherSections,
-          firstCategoryAlreadyFound: favoriteApps.isNotEmpty,
+          firstCategoryAlreadyFound: hasTopBlock || showShortcuts || showRecs,
           showAppNames: showAppNames,
           onFirstSectionFocused: favoriteApps.isNotEmpty ? _scrollDockToTop : null,
         ),

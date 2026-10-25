@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flauncher/actions.dart';
 import 'package:flauncher/family/family_settings.dart';
 import 'package:flauncher/family/recommendation_models.dart';
 import 'package:flauncher/family/ui/recommendation_detail_dialog.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 const double _kCardWidth = 160.0;
@@ -17,7 +19,13 @@ const double _kPosterHeight = 190.0;
 /// Features D-pad navigation, idle auto-scrolling through person groups,
 /// and smooth image rendering with hard memory caps.
 class RecommendationsRow extends StatefulWidget {
-  const RecommendationsRow({super.key});
+  /// True when this is the top row on the home screen, so Up from the header goes to the settings icon.
+  final bool handleUpNavigationToSettings;
+
+  /// Called when a card gets focus, for the optional follow-focus wallpaper.
+  final ValueChanged<String>? onTitleFocused;
+
+  const RecommendationsRow({super.key, this.handleUpNavigationToSettings = false, this.onTitleFocused});
 
   @override
   State<RecommendationsRow> createState() => _RecommendationsRowState();
@@ -145,6 +153,7 @@ class _RecommendationsRowState extends State<RecommendationsRow> {
                     padding: const EdgeInsets.only(right: _kCardSpacing),
                     child: _RecommendationCard(
                       item: item,
+                      onFocused: widget.onTitleFocused,
                       onSelected: () =>
                           showRecommendationDetail(context, item, feed),
                     ),
@@ -176,15 +185,27 @@ class _RecommendationsRowState extends State<RecommendationsRow> {
                   color: Colors.white,
                 ),
           ),
-          OutlinedButton(
-            onPressed: feed.isRefreshing ? null : () => feed.refresh(),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white70,
-              side: const BorderSide(color: Colors.white24),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              textStyle: const TextStyle(fontSize: 13),
+          Focus(
+            skipTraversal: true,
+            onKeyEvent: (node, event) {
+              if (widget.handleUpNavigationToSettings &&
+                  event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                Actions.invoke(context, const MoveFocusToSettingsIntent());
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: OutlinedButton(
+              onPressed: feed.isRefreshing ? null : () => feed.refresh(),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white70,
+                side: const BorderSide(color: Colors.white24),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                textStyle: const TextStyle(fontSize: 13),
+              ),
+              child: Text(feed.isRefreshing ? 'Refreshing...' : 'Refresh'),
             ),
-            child: Text(feed.isRefreshing ? 'Refreshing...' : 'Refresh'),
           ),
         ],
       ),
@@ -195,8 +216,9 @@ class _RecommendationsRowState extends State<RecommendationsRow> {
 class _RecommendationCard extends StatefulWidget {
   final Recommendation item;
   final VoidCallback onSelected;
+  final ValueChanged<String>? onFocused;
 
-  const _RecommendationCard({required this.item, required this.onSelected});
+  const _RecommendationCard({required this.item, required this.onSelected, this.onFocused});
 
   @override
   State<_RecommendationCard> createState() => _RecommendationCardState();
@@ -216,6 +238,9 @@ class _RecommendationCardState extends State<_RecommendationCard> {
 
     return FocusableActionDetector(
       onShowFocusHighlight: (v) => setState(() => _focused = v),
+      onFocusChange: (focused) {
+        if (focused) widget.onFocused?.call(item.title);
+      },
       actions: <Type, Action<Intent>>{
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (intent) {

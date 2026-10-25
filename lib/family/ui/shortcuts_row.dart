@@ -1,3 +1,4 @@
+import 'package:flauncher/actions.dart';
 import 'package:flauncher/family/family_settings.dart';
 import 'package:flauncher/flauncher_channel.dart';
 import 'package:flutter/material.dart';
@@ -30,7 +31,10 @@ IconData iconForShortcut(String id) {
 /// Horizontal row of configurable shortcut tiles (Wi-Fi, Display, etc.)
 /// that launch Android settings or apps.
 class ShortcutsRow extends StatelessWidget {
-  const ShortcutsRow({super.key});
+  /// True when this is the top row on the home screen, so Up goes to the settings icon.
+  final bool handleUpNavigationToSettings;
+
+  const ShortcutsRow({super.key, this.handleUpNavigationToSettings = false});
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +69,7 @@ class ShortcutsRow extends StatelessWidget {
                 if (i > 0) const SizedBox(width: 12),
                 _ShortcutTile(
                   def: activeDefs[i],
+                  handleUpNavigationToSettings: handleUpNavigationToSettings,
                   onSelect: () => _launchShortcut(activeDefs[i]),
                 ),
               ],
@@ -91,8 +96,9 @@ class ShortcutsRow extends StatelessWidget {
 class _ShortcutTile extends StatefulWidget {
   final ShortcutDef def;
   final VoidCallback onSelect;
+  final bool handleUpNavigationToSettings;
 
-  const _ShortcutTile({required this.def, required this.onSelect});
+  const _ShortcutTile({required this.def, required this.onSelect, this.handleUpNavigationToSettings = false});
 
   @override
   State<_ShortcutTile> createState() => _ShortcutTileState();
@@ -116,6 +122,10 @@ class _ShortcutTileState extends State<_ShortcutTile> {
               event.logicalKey == LogicalKeyboardKey.gameButtonA ||
               event.logicalKey == LogicalKeyboardKey.space) {
             widget.onSelect();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowUp && widget.handleUpNavigationToSettings) {
+            Actions.invoke(context, const MoveFocusToSettingsIntent());
             return KeyEventResult.handled;
           }
         }

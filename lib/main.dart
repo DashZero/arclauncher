@@ -19,6 +19,10 @@
 import 'dart:async';
 
 import 'package:flauncher/database.dart';
+import 'package:flauncher/family/family_settings.dart';
+import 'package:flauncher/family/recommendation_models.dart';
+import 'package:flauncher/family/recommendation_service.dart';
+import 'package:flauncher/family/wallpaper_titles.dart';
 import 'package:flauncher/flauncher_channel.dart';
 import 'package:flauncher/providers/apps_service.dart';
 import 'package:flauncher/providers/launcher_state.dart';
@@ -50,10 +54,22 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => AppsService(fLauncherChannel, fLauncherDatabase)),
         ChangeNotifierProvider(create: (_) => LauncherState()),
         ChangeNotifierProvider(create: (_) => NetworkService(fLauncherChannel)),
+        ChangeNotifierProvider(create: (_) => FamilySettings(sharedPreferences)),
+        ChangeNotifierProvider<RecommendationFeed>(
+            create: (context) => RecommendationService(
+                  Provider.of<FamilySettings>(context, listen: false),
+                  sharedPreferences,
+                  watchNextTitles: () => [for (final i in context.read<WatchNextService>().items) i.title],
+                )),
         ChangeNotifierProvider(
             create: (context) {
               SettingsService settingsService = Provider.of(context, listen: false);
-              return WallpaperService(settingsService);
+              final family = Provider.of<FamilySettings>(context, listen: false);
+              return WallpaperService(
+                settingsService,
+                family: family,
+                familyTitles: () => familyWallpaperTitles(family, context.read<RecommendationFeed>().items),
+              );
             }
         ),
         ChangeNotifierProvider(
