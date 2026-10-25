@@ -29,12 +29,14 @@ class AppearancePanelPage extends StatelessWidget {
                 value: !settingsService.dockBackdropFilterDisabled,
                 onChanged: (value) => settingsService.setDockBackdropFilterDisabled(!value),
                 title: Text(localizations.dockBlur, style: Theme.of(context).textTheme.bodyMedium),
+                subtitle: const Text('May lag on slow devices'),
                 secondary: const Icon(Icons.blur_circular),
               ),
               RoundedSwitchListTile(
                 value: !settingsService.backgroundBlurDisabled,
                 onChanged: (value) => settingsService.setBackgroundBlurDisabled(!value),
                 title: Text(localizations.backgroundBlur, style: Theme.of(context).textTheme.bodyMedium),
+                subtitle: const Text('May lag on slow devices'),
                 secondary: const Icon(Icons.blur_on),
               ),
               RoundedSwitchListTile(
