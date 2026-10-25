@@ -21,6 +21,9 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flauncher/family/family_settings.dart';
+import 'package:flauncher/family/movie_wallpaper.dart';
+import 'package:flauncher/family/photo_source.dart';
 import 'package:flauncher/flauncher_channel.dart';
 import 'package:flauncher/gradients.dart';
 import 'package:flauncher/providers/reddit_slideshow.dart';
@@ -91,10 +94,107 @@ class WallpaperService extends ChangeNotifier {
     orElse: () => FLauncherGradients.saintPetersburg,
   );
 
-  WallpaperService(this._settingsService) : _wallpaper = null {
+  // Family sources (movie art, shared photo album). Kept separate from Arc's own sources.
+  final FamilySettings? _family;
+  final List<String> Function() _familyTitles;
+  MovieWallpaper? _movieWallpaper;
+  PhotoWallpaper? _photoWallpaper;
+  Timer? _familyTimer;
+  Timer? _followDebounce;
+  File? _familyFile;
+  String? _followedTitle;
+  (bool, String, int, String) _lastFamilyConfig = (false, '', 0, '');
+
+  bool get _familyActive => _family != null && _family.movieWallpaperEnabled;
+
+  (bool, String, int, String) get _familyConfig =>
+      (_familyActive, _family?.wallpaperSource ?? '', _family?.wallpaperMinutes ?? 0, _family?.albumUrl ?? '');
+
+  WallpaperService(this._settingsService, {FamilySettings? family, List<String> Function()? familyTitles})
+      : _family = family,
+        _familyTitles = familyTitles ?? (() => const []),
+        _wallpaper = null {
     _settingsService.addListener(_onSettingsChanged);
+    _family?.addListener(_onFamilyChanged);
     _init();
   }
+
+  void _onFamilyChanged() {
+    if (!_initialized || _familyConfig == _lastFamilyConfig) return;
+    _lastFamilyConfig = _familyConfig;
+    _photoWallpaper = null; // The album link or source changed.
+    _updateFamilyState();
+    _updateWallpaper(force: true);
+  }
+
+  void _updateFamilyState() {
+    _familyTimer?.cancel();
+    _familyTimer = null;
+    if (!_familyActive) return;
+    final interval = Duration(minutes: _family!.wallpaperMinutes);
+    _familyTimer = Timer.periodic(interval, (_) => advanceFamilyWallpaper());
+    final file = _familyFile;
+    if (file == null || !file.existsSync() || DateTime.now().difference(file.lastModifiedSync()) >= interval) {
+      advanceFamilyWallpaper();
+    }
+  }
+
+  Future<void> advanceFamilyWallpaper() async {
+    final family = _family;
+    if (family == null || !_familyActive || _movieWallpaper == null) return;
+    final current = _familyFile;
+    final keep = {if (current != null) current.path};
+    File? file;
+    if (family.wallpaperSource == 'photos' && family.albumUrl.isNotEmpty) {
+      _photoWallpaper ??= PhotoWallpaper(_photoDir, GooglePhotosAlbumSource(family.albumUrl));
+      file = await _photoWallpaper!.next(capMb: family.cacheCapMb, keep: keep);
+    } else {
+      file = await _movieWallpaper!.next(
+        tmdbKey: family.tmdbKey,
+        width: family.wallpaperWidth,
+        capMb: family.cacheCapMb,
+        titles: _familyTitles(),
+        keep: keep,
+      );
+    }
+    if (file == null || !_familyActive) return;
+    await _swapFamilyFile(file);
+  }
+
+  /// Follow-focus: shows a backdrop for [title] while it is highlighted. Off by default.
+  void followTitle(String title) {
+    final family = _family;
+    if (family == null || !family.followFocusWallpaper || !_familyActive || title == _followedTitle) return;
+    _followedTitle = title;
+    _followDebounce?.cancel();
+    _followDebounce = Timer(const Duration(milliseconds: 1500), () async {
+      final file = await _movieWallpaper?.next(
+        tmdbKey: family.tmdbKey,
+        width: family.wallpaperWidth,
+        capMb: family.cacheCapMb,
+        titles: [title],
+        keep: {if (_familyFile != null) _familyFile!.path},
+      );
+      if (file != null && title == _followedTitle) await _swapFamilyFile(file);
+    });
+  }
+
+  Future<void> _swapFamilyFile(File file) async {
+    final previous = _familyFile;
+    _familyFile = file;
+    _updateWallpaper(force: true);
+    // Free the old decoded image and file so only the current and next stay around.
+    if (previous != null && previous.path != file.path) {
+      await FileImage(previous).evict();
+      Timer(const Duration(seconds: 3), () {
+        if (previous.existsSync()) previous.deleteSync();
+      });
+    }
+  }
+
+  Directory get _movieDir => Directory('${_baseDir.path}/family_movies');
+  Directory get _photoDir => Directory('${_baseDir.path}/family_photos');
+  late Directory _baseDir;
 
   bool _lastTimeBasedEnabled = false;
   // Slideshow settings that require restarting its timer when they change.
@@ -143,6 +243,9 @@ class WallpaperService extends ChangeNotifier {
     _slideshowTimer?.cancel();
     _redditTimer?.cancel();
     _redditDebounce?.cancel();
+    _family?.removeListener(_onFamilyChanged);
+    _familyTimer?.cancel();
+    _followDebounce?.cancel();
     super.dispose();
   }
 
@@ -158,7 +261,11 @@ class WallpaperService extends ChangeNotifier {
     _slideshowFile = newestCachedImage(_slideshow.cacheDir);
     _redditSlideshow = RedditSlideshow(Directory("${directory.path}/reddit_slideshow"));
     _redditFile = newestCachedImage(_redditSlideshow.cacheDir);
+    _baseDir = directory;
+    _movieWallpaper = MovieWallpaper(_movieDir);
+    _familyFile = newestCachedImage(_family?.wallpaperSource == 'photos' ? _photoDir : _movieDir);
     _initialized = true;
+    _lastFamilyConfig = _familyConfig;
 
     _lastTimeBasedEnabled = _settingsService.timeBasedWallpaperEnabled;
     _lastSlideshowConfig = _slideshowConfig;
@@ -167,6 +274,7 @@ class WallpaperService extends ChangeNotifier {
     _updateTimerState();
     _updateSlideshowState();
     _updateRedditState();
+    _updateFamilyState();
   }
 
   void _updateSlideshowState() {
@@ -240,6 +348,7 @@ class WallpaperService extends ChangeNotifier {
     if (!isInitialized) return null;
     if (_settingsService.redditWallpaperEnabled) return null;
     if (_settingsService.unsplashSlideshowEnabled) return null;
+    if (_familyActive && _familyFile != null) return null;
 
     final now = DateTime.now();
     final isDay = now.hour >= 6 && now.hour < 18;
@@ -274,7 +383,10 @@ class WallpaperService extends ChangeNotifier {
 
     final slideshowFile = _slideshowFile;
     final redditFile = _redditFile;
-    if (_settingsService.redditWallpaperEnabled && redditFile != null && redditFile.existsSync()) {
+    final familyFile = _familyFile;
+    if (_familyActive && familyFile != null && familyFile.existsSync()) {
+      newWallpaper = FileImage(familyFile);
+    } else if (_settingsService.redditWallpaperEnabled && redditFile != null && redditFile.existsSync()) {
       newWallpaper = FileImage(redditFile);
     } else if (_settingsService.unsplashSlideshowEnabled && slideshowFile != null && slideshowFile.existsSync()) {
       newWallpaper = FileImage(slideshowFile);
@@ -342,6 +454,10 @@ class WallpaperService extends ChangeNotifier {
     if (_settingsService.unsplashSlideshowEnabled) {
       await _settingsService.setUnsplashSlideshowEnabled(false);
     }
+    // Choosing a wallpaper by hand turns the family movie art off.
+    if (_familyActive) {
+      await _family!.setMovieWallpaperEnabled(false);
+    }
     await _replacePairedVideo(targetFile);
 
     final readStream = sourceFile.openRead();
@@ -361,6 +477,10 @@ class WallpaperService extends ChangeNotifier {
     }
     if (_settingsService.unsplashSlideshowEnabled) {
       await _settingsService.setUnsplashSlideshowEnabled(false);
+    }
+    // Choosing a wallpaper by hand turns the family movie art off.
+    if (_familyActive) {
+      await _family!.setMovieWallpaperEnabled(false);
     }
 
     await _replacePairedVideo(targetFile);
@@ -397,6 +517,10 @@ class WallpaperService extends ChangeNotifier {
     if (_settingsService.unsplashSlideshowEnabled) {
       await _settingsService.setUnsplashSlideshowEnabled(false);
     }
+    // Choosing a wallpaper by hand turns the family movie art off.
+    if (_familyActive) {
+      await _family!.setMovieWallpaperEnabled(false);
+    }
 
     final readStream = sourceFile.openRead();
     final writeStream = targetVideoFile.openWrite();
@@ -421,6 +545,10 @@ class WallpaperService extends ChangeNotifier {
     }
     if (_settingsService.unsplashSlideshowEnabled) {
       await _settingsService.setUnsplashSlideshowEnabled(false);
+    }
+    // Choosing a wallpaper by hand turns the family movie art off.
+    if (_familyActive) {
+      await _family!.setMovieWallpaperEnabled(false);
     }
 
     await _settingsService.setGradientUuid(fLauncherGradient.uuid);

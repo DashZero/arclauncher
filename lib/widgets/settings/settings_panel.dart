@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import 'package:flauncher/family/ui/family_settings_page.dart';
+import 'package:flauncher/family/ui/setup_page.dart';
+import 'package:flauncher/family/ui/shortcuts_settings_page.dart';
+import 'package:flauncher/family/ui/taste_profile_page.dart';
 import 'package:flauncher/widgets/side_panel_dialog.dart';
 import 'package:flauncher/widgets/settings/applications_panel_page.dart';
 import 'package:flauncher/widgets/settings/launcher_sections_panel_page.dart';
@@ -139,6 +143,14 @@ class _SettingsPanelState extends State<SettingsPanel> {
                       return _FastPageRoute(builder: (_) => AccentColorPage());
                     case BrightnessSettingsPage.routeName:
                       return _FastPageRoute(builder: (_) => BrightnessSettingsPage());
+                    case FamilySettingsPage.routeName:
+                      return _FastPageRoute(builder: (_) => const FamilySettingsPage());
+                    case FamilySetupPage.routeName:
+                      return _FastPageRoute(builder: (_) => const FamilySetupPage());
+                    case ShortcutsSettingsPage.routeName:
+                      return _FastPageRoute(builder: (_) => const ShortcutsSettingsPage());
+                    case TasteProfilePage.routeName:
+                      return _FastPageRoute(builder: (_) => const TasteProfilePage());
                     case AppDetailsPage.routeName:
                       return _FastPageRoute(builder: (_) => AppDetailsPage(application: settings.arguments as App));
                     default:

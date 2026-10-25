@@ -17,6 +17,8 @@
  */
 
 import 'package:flauncher/database.dart';
+import 'package:flauncher/family/family_settings.dart';
+import 'package:flauncher/family/recommendation_models.dart';
 import 'package:flauncher/flauncher.dart';
 import 'package:flauncher/flauncher_channel.dart';
 import 'package:flauncher/gradients.dart';
@@ -37,11 +39,27 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'helpers.dart';
 import 'mocks.dart';
 import 'mocks.mocks.dart';
 
+
+/// The home screen shows the family rows; these tests do not exercise them.
+class _EmptyFeed extends ChangeNotifier implements RecommendationFeed {
+  @override
+  List<Recommendation> get items => const [];
+
+  @override
+  bool get isRefreshing => false;
+
+  @override
+  Future<void> refresh() async {}
+
+  @override
+  Future<void> thumb(Recommendation item, bool up) async {}
+}
 
 void main() {
   setUpAll(() async {
@@ -464,6 +482,36 @@ void main() {
     expect(isSettingsIconFocused(tester), isFalse);
     expect(isAppCardFocused(tester, "me.efesser.tv1"), isTrue);
   });
+
+  testWidgets("With the shortcut tiles shown, up from the apps reaches them and then the settings icon",
+      (tester) async {
+    final appsService = mkAppService();
+    when(appsService.categoriesWithApps).thenReturn([
+      CategoryWithApps(fakeCategory(name: "tv", order: 0), [
+        fakeApp(packageName: "me.efesser.tv1", name: "tv 1", version: "1.0.0"),
+      ]),
+    ]);
+
+    await _pumpWidgetWithProviders(
+      tester,
+      mkWallpaperService(),
+      appsService,
+      mkSettingsService(),
+      mkWatchNextService(),
+      const {'family_show_shortcuts': true, 'family_show_recs': false},
+    );
+    expect(isAppCardFocused(tester, "me.efesser.tv1"), isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(isAppCardFocused(tester, "me.efesser.tv1"), isFalse);
+    expect(isSettingsIconFocused(tester), isFalse);
+    expect(find.text('Wi-Fi'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(isSettingsIconFocused(tester), isTrue);
+  });
 }
 
 SettingsService mkSettingsService() {
@@ -547,7 +595,9 @@ Future<void> _pumpWidgetWithProviders(
   WallpaperService wallpaperService,
   AppsService appsService,
   SettingsService settingsService,
-  [WatchNextService? watchNextService,]
+  [WatchNextService? watchNextService,
+  // The family rows are hidden unless a test asks for them.
+  Map<String, Object> familyPrefs = const {'family_show_shortcuts': false, 'family_show_recs': false},]
 ) async {
   try {
     final cwa = appsService.categoriesWithApps;
@@ -555,9 +605,14 @@ Future<void> _pumpWidgetWithProviders(
     when(appsService.launcherSections).thenReturn(cwa);
   } catch (_) {}
 
+  SharedPreferences.setMockInitialValues(familyPrefs);
+  final familySettings = FamilySettings(await SharedPreferences.getInstance());
+
   await tester.pumpWidget(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider<FamilySettings>.value(value: familySettings),
+        ChangeNotifierProvider<RecommendationFeed>.value(value: _EmptyFeed()),
         ChangeNotifierProvider<WallpaperService>.value(value: wallpaperService),
         ChangeNotifierProvider<AppsService>.value(value: appsService),
         ChangeNotifierProvider<SettingsService>.value(value: settingsService),

@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import 'package:flauncher/family/ui/family_settings_page.dart';
 import 'package:flauncher/providers/apps_service.dart';
 import 'package:flauncher/providers/update_service.dart';
 import 'package:flauncher/build_flags.dart';
@@ -65,6 +66,12 @@ class SettingsPanelPage extends StatelessWidget {
                   leading: const Icon(Icons.settings_suggest_outlined),
                   title: Text(localizations.system, style: Theme.of(context).textTheme.bodyMedium),
                   onPressed: () => Navigator.of(context).pushNamed(GeneralSettingsPage.routeName),
+                ),
+                FocusableSettingsTile(
+                  showChevron: true,
+                  leading: const Icon(Icons.family_restroom),
+                  title: Text('Family', style: Theme.of(context).textTheme.bodyMedium),
+                  onPressed: () => Navigator.of(context).pushNamed(FamilySettingsPage.routeName),
                 ),
                 const SettingsSectionDivider(),
                 FocusableSettingsTile(
